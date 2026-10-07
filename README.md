@@ -217,7 +217,7 @@ video-sparse-attention/
 │   └── test_numerics.py
 │
 ├── README.md
-└── README_CN.md
+└── README_EN.md
 ```
 
 ---
