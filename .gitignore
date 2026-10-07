@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Build outputs
+build/
+dist/
+*.so
+*.pyd
+*.dll
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Generated benchmark and profiler artifacts
+results/logs/*
+!results/logs/.gitkeep
+results/profiler/*
+!results/profiler/.gitkeep
+profiling/nsight_compute/*
+!profiling/nsight_compute/.gitkeep
+profiling/nsight_systems/*
+!profiling/nsight_systems/.gitkeep
+
+# Model caches and large generated media
+checkpoints/
+outputs/
+*.mp4
+*.safetensors
+*.ckpt
+*.pt
+*.pth

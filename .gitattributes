@@ -1,0 +1,5 @@
+* text=auto
+*.sh text eol=lf
+*.cu text eol=lf
+*.cuh text eol=lf
+*.py text eol=lf
