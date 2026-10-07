@@ -973,10 +973,10 @@ Z
 
 # 15. 当前进度
 
-- [ ] Research Environment
-- [ ] Benchmark Framework
-- [ ] Naive Attention Baseline
-- [ ] PyTorch SDPA Baseline
+- [x] Research Environment
+- [x] Benchmark Framework
+- [x] Naive Attention Baseline
+- [x] PyTorch SDPA Baseline
 - [ ] Triton Dense Attention
 - [ ] FlashAttention-style Kernel
 - [ ] Generic Block-Sparse Attention
