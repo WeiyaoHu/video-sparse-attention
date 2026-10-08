@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import faulthandler
+import sys
 
 import torch
 
@@ -28,6 +30,15 @@ from benchmarks.benchmark_utils import (
 from kernels.dense.torch_reference import naive_attention, reference_attention, sdpa_attention
 
 KERNELS = {"naive": naive_attention, "sdpa": sdpa_attention}
+try:
+    from kernels.dense.triton_dense import triton_dense_attention
+
+    KERNELS["triton_dense"] = triton_dense_attention
+except ImportError:
+    pass
+
+# 会显式构造 N×N 矩阵（S 和 P）的 kernel，运行前先做显存预估
+QUADRATIC_MEM_KERNELS = {"naive", "triton_dense"}
 
 FIELDS = [
     "timestamp", "kernel", "B", "H", "N", "D", "dtype", "status",
@@ -42,7 +53,7 @@ ERR_CHECK_MAX_N = 2048
 
 
 def naive_mem_estimate(B, H, N, dtype) -> int:
-    """naive attention 的峰值额外显存估计：scores 和 probs 两个 [B,H,N,N] 同时存在。"""
+    """naive / triton_dense 的峰值额外显存估计：S 和 P 两个 [B,H,N,N] 同时存在。"""
     return 2 * B * H * N * N * torch.empty((), dtype=dtype).element_size()
 
 
@@ -57,6 +68,8 @@ def main():
     p.add_argument("--device", default="auto")
     p.add_argument("--warmup", type=int, default=5)
     p.add_argument("--iters", type=int, default=20)
+    p.add_argument("--timeout", type=int, default=180,
+                   help="单个配置超过这么多秒仍未完成，就打印卡住的位置并退出（0 表示不限）")
     p.add_argument("--out", default=str(REPO_ROOT / "results" / "csv" / "dense_attention.csv"))
     args = p.parse_args()
 
@@ -88,12 +101,17 @@ def main():
                     }
 
                     # Windows/WSL 下显存不足时驱动可能退到共享内存而不是报 OOM，
-                    # 结果会慢几个数量级且没有意义，所以 naive 先做显存预估，放不下就直接跳过。
+                    # 结果会慢几个数量级且没有意义，所以这类 kernel 先做显存预估，放不下就直接跳过。
                     free = free_vram_bytes(device)
-                    if name == "naive" and free is not None and naive_mem_estimate(B, H, N, dtype) > 0.9 * free:
+                    if name in QUADRATIC_MEM_KERNELS and free is not None and naive_mem_estimate(B, H, N, dtype) > 0.9 * free:
                         res = {"status": "skipped_mem"}
                     else:
+                        print(f"{name:>6} H={H:<3} D={D:<4} N={N:<6} running...", end="\r", flush=True)
+                        # 看门狗：卡死时自动打印各线程的调用栈并退出，不必手动 Ctrl+C
+                        if args.timeout > 0:
+                            faulthandler.dump_traceback_later(args.timeout, exit=True, file=sys.stderr)
                         res = benchmark(fn, q, k, v, device=device, warmup=args.warmup, iters=args.iters)
+                        faulthandler.cancel_dump_traceback_later()
 
                     row.update(res)
                     if res["status"] == "ok":

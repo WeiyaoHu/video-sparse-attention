@@ -977,7 +977,7 @@ Z
 - [x] Benchmark Framework
 - [x] Naive Attention Baseline
 - [x] PyTorch SDPA Baseline
-- [ ] Triton Dense Attention
+- [x] Triton Dense Attention
 - [ ] FlashAttention-style Kernel
 - [ ] Generic Block-Sparse Attention
 - [ ] Nsight Profiling

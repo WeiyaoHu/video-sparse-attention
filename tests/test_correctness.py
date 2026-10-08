@@ -17,6 +17,17 @@ KERNELS = {
     "sdpa": sdpa_attention,
 }
 
+# 只能在 GPU 上运行的 kernel
+CUDA_ONLY = set()
+
+try:
+    from kernels.dense.triton_dense import triton_dense_attention
+
+    KERNELS["triton_dense"] = triton_dense_attention
+    CUDA_ONLY.add("triton_dense")
+except ImportError:  # 没装 triton 的环境（例如纯 CPU）跳过
+    pass
+
 # 相对 float64 参考的容差，按精度区分
 TOL = {
     torch.float32: dict(rtol=1e-4, atol=1e-5),
@@ -38,9 +49,9 @@ def assert_matches_reference(fn, q, k, v, mask=None):
     torch.testing.assert_close(out.double(), ref, **TOL[q.dtype])
 
 
-def _skip_if_unsupported(dtype):
-    if DEVICE.type == "cpu" and dtype != torch.float32:
-        pytest.skip("半精度测试需要 GPU")
+def _skip_if_unsupported(name, dtype):
+    if DEVICE.type == "cpu" and (dtype != torch.float32 or name in CUDA_ONLY):
+        pytest.skip("需要 GPU")
 
 
 def make_block_mask(N, block, density, device, seed=0):
@@ -58,7 +69,7 @@ def make_block_mask(N, block, density, device, seed=0):
 @pytest.mark.parametrize("D", [64, 128])
 @pytest.mark.parametrize("N", [64, 256, 1000, 2048])  # 1000：故意不是 block size 的整数倍
 def test_dense_matches_reference(name, dtype, D, N):
-    _skip_if_unsupported(dtype)
+    _skip_if_unsupported(name, dtype)
     q, k, v = make_qkv(1, 4, N, D, dtype=dtype, device=DEVICE, seed=N + D)
     assert_matches_reference(KERNELS[name], q, k, v)
 
@@ -68,7 +79,7 @@ def test_dense_matches_reference(name, dtype, D, N):
 @pytest.mark.parametrize("density", [0.5, 0.125])
 @pytest.mark.parametrize("N,block", [(512, 64), (1000, 64), (1024, 128)])
 def test_block_mask_matches_reference(name, dtype, density, N, block):
-    _skip_if_unsupported(dtype)
+    _skip_if_unsupported(name, dtype)
     q, k, v = make_qkv(1, 4, N, 64, dtype=dtype, device=DEVICE, seed=N)
     mask = make_block_mask(N, block, density, DEVICE)
     assert_matches_reference(KERNELS[name], q, k, v, mask)
@@ -77,6 +88,7 @@ def test_block_mask_matches_reference(name, dtype, density, N, block):
 @pytest.mark.parametrize("name", list(KERNELS))
 def test_batch_and_head_independence(name):
     """每个 (batch, head) 的结果应当只依赖自己的 Q/K/V。"""
+    _skip_if_unsupported(name, torch.float32)
     q, k, v = make_qkv(2, 3, 128, 64, dtype=torch.float32, device=DEVICE)
     fn = KERNELS[name]
     with torch.inference_mode():

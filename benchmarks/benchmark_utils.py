@@ -70,8 +70,11 @@ def benchmark(fn, *args, device, warmup: int = 5, iters: int = 20, slow_threshol
             torch.cuda.reset_peak_memory_stats(device)
             base_mem = torch.cuda.memory_allocated(device)
 
-        # 试跑（同时触发 lazy init / Triton JIT 编译）
+        # 第一次调用会触发 lazy init 和 Triton JIT 编译（可能要几秒），不计时
+        fn(*args, **kwargs)
         _sync(device)
+
+        # 再试跑一次，用真实执行时间判断是否需要减少迭代次数
         t0 = time.perf_counter()
         fn(*args, **kwargs)
         _sync(device)
